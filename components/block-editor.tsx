@@ -313,85 +313,6 @@ export function BlockEditor({ block, index, pageId, onUpdate, onDelete, onAddBlo
     }
   }
 
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+B for bold
-      if (e.ctrlKey && e.key === "b") {
-        e.preventDefault()
-        if (contentEditableRef.current) {
-          document.execCommand("bold", false, undefined)
-          onUpdate({ content: contentEditableRef.current.innerHTML }) // Sync state after execCommand
-        }
-      }
-      // Ctrl+I for italic
-      else if (e.ctrlKey && e.key === "i") {
-        e.preventDefault()
-        if (contentEditableRef.current) {
-          document.execCommand("italic", false, undefined)
-          onUpdate({ content: contentEditableRef.current.innerHTML }) // Sync state after execCommand
-        }
-      }
-      // Handle list operations
-      if (block.type === "bullet-list" || block.type === "numbered-list") {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault()
-          // If the content is empty and not the first item, convert to paragraph
-          if (contentEditableRef.current && contentEditableRef.current.innerHTML.trim() === "") {
-            dispatch({
-              type: "CONVERT_BLOCK_INLINE",
-              payload: {
-                pageId,
-                blockId: block.id,
-                type: "text",
-                keepContent: true,
-              },
-            })
-            return
-          }
-          // Add a new list item
-          dispatch({
-            type: "ADD_LIST_ITEM",
-            payload: {
-              pageId,
-              blockId: block.id,
-              indent: e.ctrlKey, // Ctrl+Enter to indent
-            },
-          })
-          return
-        }
-        // Tab to indent, Shift+Tab to outdent
-        if (e.key === "Tab") {
-          e.preventDefault()
-          const indent = !e.shiftKey
-          onUpdate({
-            properties: { ...block.properties, indent: indent },
-          })
-          return
-        }
-      }
-      // For regular blocks - only add new block when user presses Enter
-      if (e.key === "Enter" && !e.shiftKey) {
-        if (contentEditableRef.current && contentEditableRef.current.innerHTML.trim() === "") {
-          e.preventDefault()
-          onAddBlock("text")
-        }
-      }
-      // Handle backspace - go to previous block if current is empty
-      if (e.key === "Backspace" && contentEditableRef.current && contentEditableRef.current.innerHTML.trim() === "") {
-        e.preventDefault()
-        onDelete()
-      }
-      // Slash commands
-      if (e.key === "/" && contentEditableRef.current && contentEditableRef.current.innerHTML.trim() === "") {
-        e.preventDefault()
-        setShowBlockMenu(true)
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [block.id, block.content, dispatch, onUpdate, onAddBlock, onDelete])
-
   const handleContentChange = (e: React.FormEvent<HTMLDivElement>) => {
     saveCurrentSelection() // Save selection before updating React state
     onUpdate({ content: e.currentTarget.innerHTML })
@@ -1103,16 +1024,26 @@ export function BlockEditor({ block, index, pageId, onUpdate, onDelete, onAddBlo
           </div>
         )
       case "numbered-list":
+        const currentPageBlocks = state.pages.find((p) => p.id === pageId)?.content || []
+        let displayNumber = 1
+        // Iterate backward to find the start of the current numbered list sequence
+        for (let i = index - 1; i >= 0; i--) {
+          if (currentPageBlocks[i].type === "numbered-list") {
+            displayNumber++
+          } else {
+            // Break if a non-numbered-list block is encountered
+            break
+          }
+        }
         return (
           <div className="flex">
-            <div className="flex-shrink-0 w-6 text-right mr-2">{index + 1}.</div>
+            <div className="flex-shrink-0 w-6 text-right mr-2">{displayNumber}.</div>
             <div
               ref={contentEditableRef}
               contentEditable="true"
               onInput={handleContentChange}
-              onKeyDown={handleInternalKeyDown} // Use internal handler for contentEditable
+              onKeyDown={handleInternalKeyDown}
               onMouseUp={handleTextSelect}
-              // Placeholder attribute does not work on contentEditable divs
               className={getClassName()}
               style={getBlockStyle()}
             />
